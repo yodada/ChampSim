@@ -1,8 +1,92 @@
 # Modified ChampSim for ML Prefetching Competition
 
+## Traces:
+
+The traces can be found at [this link](https://utexas.box.com/s/2k54kp8zvrqdfaa8cdhfquvcxwh7yn85).
+There are two types of traces that can be found here:
+- Execution traces in ChampSimTraces that ChampSim uses to simulate program execution.
+- Load traces in LoadTraces that you can use to train your ML models on.
+Note that you do not unzip execution traces as ChampSim expects it to be in the zipped
+format. The load traces on the other hand are plain text CSV.
+
+## Prefetcher File
+
+To utilize the ML prefetcher in ChampSim, you have to generate a prefetcher file
+that contains one prefetch per line. Each line should consist of two space
+separated integral values, the unique instruction ID on which you want to send a
+prefetch and the address you want to prefetch. Note that the prefetches should
+be in the order that they occur in the trace.
+
+For example:
+
+```
+3659 42229223
+5433 23369181
+6928 82819430
+```
+
+Your code should have two modes of functioning:
+
+1. Taking in a trace that your model trains on
+2. Taking in another trace that your model produces predictions in the form of
+   the prefetcher file.
+
+## Building, Running, and Evaluating
+
+This has been rolled into one script `ml_prefetch_sim.py`. Below there are some
+common use cases highlighted, but more information can be found for each of the
+subcommands by running:
+
+```
+./ml_prefetch_sim.py help subcommand
+```
+
+where subcommand is any of `build|run|eval`
+
+### Building
+
+To build both the baseline ChampSim binary with no prefetcher and the prefetcher
+ChampSim binary that reads your ML model's output from a file, run:
+
+```
+./ml_prefetch_sim.py build
+```
+
+### Running
+
+To run the baseline ChampSim binary on an execution trace:
+
+```
+./ml_prefetch_sim.py run path_to_trace_here
+```
+
+To additionally run the prefetcher ChampSim binary:
+
+```
+./ml_prefetch_sim.py run path_to_trace_here --prefetch path_to_prefetcher_file
+```
+
+To run the prefetcher ChampSim binary only:
+
+```
+./ml_prefetch_sim.py run path_to_trace_here --prefetch path_to_prefetcher_file --no-base
+```
+
+### Evaluation
+
+To evaluate the performance of ML prefetcher (and compare it against the baseline
+of no prefetcher), run:
+
+```
+./ml_prefetch_sim.py eval
+```
+
 ## Changes:
 
-- Prefetcher script to load ML model prefetch predictions into ChampSim
+- Add LLC prefetcher (from\_file) to load ML model prefetch predictions into ChampSim
+- Remove same-page restriction in src/cache.cc for more irregular prefetching
+  opportunity
+- Add ml\_prefetch\_sim.py to handle all of the building, running, and evaluation.
 
 ---
 
