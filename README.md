@@ -1,5 +1,10 @@
 # Modified ChampSim for ML Prefetching Competition
 
+We will use ChampSim to evaluate the effectiveness of your ML prefetchers.  You
+prefetching models will be trained using the Load Traces that we provide (details below), 
+and they will generate an Ouput File with a list of prefetches that will be fed back into 
+ChampSim to compute coverage, accuracy and instructions per cycle (IPC).
+
 ## Traces:
 
 The traces can be found at [this link](https://utexas.box.com/s/2k54kp8zvrqdfaa8cdhfquvcxwh7yn85).
@@ -13,9 +18,8 @@ Unique Instr Id, Cycle Count, Load Address, Instruction Pointer of the Load, LLC
 
 - Execution traces under the folder ChampSimTraces that ChampSim will need to
   compute IPC.  You do not need these traces to train your models, they are
-  only provided to facilitate an evaluation of instructions per cycle (IPC).
-  Note that you do not unzip execution traces as ChampSim expects it to be in
-  the zipped format. 
+  only provided to facilitate an evaluation using IPCs.  Note that you do not
+  unzip execution traces as ChampSim expects it to be in the zipped format. 
 
 ## Output File
 
@@ -25,7 +29,7 @@ values, the unique instruction ID for which you want to issue a prefetch and the
 load address you want to prefetch.  The unique instruction ID corresponds to
 the ID of the triggering load in the input Load Trace.  You can include upto two 
 prefetches per load listed in the Load Trace.  You can choose not to prefetch
-for any load.  Note that the prefetches should be in the order that they occur in the trace.
+for a load.  Note that the prefetches should be in the order that they occur in the trace.
 
 For example, consider a Load Trace as follows:
 ```
@@ -100,7 +104,7 @@ of no prefetcher), run:
 ./ml_prefetch_sim.py eval
 ```
 
-### Competition Judging
+## Competition Judging
 
 To test how submissions generalize, our test set evaluation will have two components:
 
