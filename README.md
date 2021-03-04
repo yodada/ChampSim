@@ -25,7 +25,7 @@ values, the unique instruction ID for which you want to issue a prefetch and the
 load address you want to prefetch.  The unique instruction ID corresponds to
 the ID of the triggering load in the input Load Trace.  You can include upto two 
 prefetches per load listed in the Load Trace.  You can choose not to prefetch
-for any load.  Note that the prefetches should be in the order that they occur in the trace.
+for a load.  Note that the prefetches should be in the order that they occur in the trace.
 
 For example, consider a Load Trace as follows:
 ```
@@ -100,7 +100,7 @@ of no prefetcher), run:
 ./ml_prefetch_sim.py eval
 ```
 
-### Competition Judging
+## Competition Judging
 
 To test how submissions generalize, our test set evaluation will have two components:
 
