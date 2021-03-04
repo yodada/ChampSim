@@ -9,18 +9,18 @@ There are two types of traces that can be found here:
 ```
 Unique Instr Id, Cycle Count, Load Address, Instruction Pointer of the Load, LLC hit/miss
 ```
+  The load traces are plain text CSV.
 
 - Execution traces under the folder ChampSimTraces that ChampSim will need to
   compute IPC.  You do not need these traces to train your models, they are
   only provided to facilitate an evaluation of instructions per cycle (IPC).
-
-Note that you do not unzip execution traces as ChampSim expects it to be in the zipped
-format. The load traces on the other hand are plain text CSV.
+  Note that you do not unzip execution traces as ChampSim expects it to be in
+  the zipped format. 
 
 ## Output File
 
 For a given Load Trace, your code should generate an output file that contains one
-prefetch per line. Each line should consist of two space separated integral
+prefetch per line. Each line should consist of two space-separated integral
 values, the unique instruction ID for which you want to issue a prefetch and the
 load address you want to prefetch.  The unique instruction ID corresponds to
 the ID of the triggering load in the input Load Trace.  You can include upto two 
@@ -40,6 +40,8 @@ Your output file could look something like this:
 3659 A+2    # Issue second prefetch for Instruction 3569
 5433 B+8    # Issue only one prefetch for Instruction 5433
 ```
+
+## Your Code:
 
 Your code should have two modes of functioning:
 
@@ -97,6 +99,17 @@ of no prefetcher), run:
 ```
 ./ml_prefetch_sim.py eval
 ```
+
+### Competition Judging
+
+To test how submissions generalize, our test set evaluation will have two components:
+
+- Undisclosed execution samples for the training traces: You can submit a
+  pre-trained model for each benchmark in the training set, and we will
+  evaluate it on a different sample of the same benchmark
+
+- Undisclosed benchmarks: We will train and test your model on unseen
+  benchmarks using the training routines that you provide
 
 ## Changes made to ChampSim for the competition:
 
