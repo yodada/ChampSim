@@ -3,66 +3,58 @@
 
 #include <cstdlib>
 #include <fstream>
+#include <limits>
 
 #define MAX_PREFETCH_DEGREE 2
 
-ifstream prefetch_file_stream;
-uint64_t next_prefetch_load_num;
+uint64_t next_prefetch_instr_id;
 uint64_t next_prefetch_addr;
 uint64_t line_no;
-uint64_t load_num;
 
 void CACHE::llc_prefetcher_initialize() 
 {
     cout << "CPU " << cpu << " LLC from_file prefetcher" << endl;
 
     line_no = 0;
-    
-    const char* prefetch_file_path = getenv("PREFETCH_FILE");
-    if (prefetch_file_path == NULL) {
-        cerr << "PREFETCH_FILE environment variable not set" << endl;
-        exit(-1);
-    }
 
-    prefetch_file_stream.exceptions(ifstream::badbit | ifstream::failbit | ifstream::eofbit);
+    cin.exceptions(ifstream::eofbit);
     try {
-        prefetch_file_stream.open(prefetch_file_path);
-        // Read first prefetch from file
-        prefetch_file_stream >> next_prefetch_load_num >> next_prefetch_addr;
+        cin >> next_prefetch_instr_id >> next_prefetch_addr;
         line_no++;
     } catch (const ifstream::failure& e) {
-        cerr << "Failed to open / read PREFETCH_FILE \"" << prefetch_file_path << "\"" << endl;
-        exit(-1);
+        if (cin.eof()) {
+            cerr << "No data fed in through stdin?" << endl;
+        } else {
+            cerr << "Failed to read from stdin" << endl;
+            exit(-1);
+        }
     }
-
-    load_num = 0;
 }
 
-uint32_t CACHE::llc_prefetcher_operate(uint64_t addr, uint64_t ip, uint8_t cache_hit, uint8_t type, uint32_t metadata_in)
+uint32_t CACHE::llc_prefetcher_operate(uint64_t addr, uint64_t ip, uint8_t cache_hit, uint8_t type, uint32_t metadata_in, uint64_t instr_id, uint64_t curr_cycle)
 {
-    unsigned count = 0;
-    while (load_num == next_prefetch_load_num) {
-        if (count >= MAX_PREFETCH_DEGREE) {
+    unsigned num_prefetch = 0;
+    while (instr_id == next_prefetch_instr_id) {
+        if (num_prefetch >= MAX_PREFETCH_DEGREE) {
             cerr << "Exceeded max prefetch degree of " << MAX_PREFETCH_DEGREE << " on line number " << line_no << endl;
         } else {
             prefetch_line(ip, addr, next_prefetch_addr, FILL_LLC, 0);
-            cout << "Prefetch " << next_prefetch_addr << " at load_num " << next_prefetch_load_num << endl;
+            cout << "Prefetch " << next_prefetch_addr << " for instr_id " << next_prefetch_instr_id << endl;
         }
         try {
             // Read next prefetch from file
-            prefetch_file_stream >> next_prefetch_load_num >> next_prefetch_addr;
+            cin >> next_prefetch_instr_id >> next_prefetch_addr;
             line_no++;
         } catch (const ifstream::failure& e) {
-            if (prefetch_file_stream.eof()) {
+            if (cin.eof()) {
+                next_prefetch_instr_id = std::numeric_limits<uint64_t>::max();
                 break;
             }
             cerr << "Failed to read next line " << line_no << endl;
             exit(-1);
         }
-        count++;
+        num_prefetch++;
     }
-
-    load_num++;
 
     return metadata_in;
 }
@@ -75,5 +67,4 @@ uint32_t CACHE::llc_prefetcher_cache_fill(uint64_t addr, uint32_t set, uint32_t 
 void CACHE::llc_prefetcher_final_stats()
 {
     cout << "CPU " << cpu << " LLC from file prefetcher final stats" << endl;
-    prefetch_file_stream.close();
 }
