@@ -24,12 +24,14 @@ Unique Instr Id, Cycle Count, Load Address, Instruction Pointer of the Load, LLC
 ## Output File
 
 For a given Load Trace, your code should generate an output file that contains one
-prefetch per line. Each line should consist of two space-separated integral
+prefetch per line.  Each line should consist of two space-separated integral
 values, the unique instruction ID for which you want to issue a prefetch and the
 load address you want to prefetch.  The unique instruction ID corresponds to
-the ID of the triggering load in the input Load Trace.  You can include upto two 
+the ID of the triggering load in the input Load Trace.  You can include up to two 
 prefetches per load listed in the Load Trace.  You can choose not to prefetch
 for a load.  Note that the prefetches should be in the order that they occur in the trace.
+Should you exceed the maximum number of prefetches per load, the first two will
+be kept and the remaining excess prefetches for that load will be discarded.
 
 For example, consider a Load Trace as follows:
 ```
