@@ -4,32 +4,48 @@
 
 The traces can be found at [this link](https://utexas.box.com/s/2k54kp8zvrqdfaa8cdhfquvcxwh7yn85).
 There are two types of traces that can be found here:
-- Execution traces in ChampSimTraces that ChampSim uses to simulate program execution.
-- Load traces in LoadTraces that you can use to train your ML models on.
+- Load traces under the folder LoadTraces that you will use to train your ML models.  The 
+  load trace is a series of program's LLC accesses, and the trace format is as follows: 
+```
+Unique Instr Id, Cycle Count, Load Address, Instruction Pointer of the Load, LLC hit/miss
+```
+
+- Execution traces under the folder ChampSimTraces that ChampSim will need to
+  compute IPC.  You do not need these traces to train your models, they are
+  only provided to facilitate an evaluation of instructions per cycle (IPC).
+
 Note that you do not unzip execution traces as ChampSim expects it to be in the zipped
 format. The load traces on the other hand are plain text CSV.
 
-## Prefetcher File
+## Output File
 
-To utilize the ML prefetcher in ChampSim, you have to generate a prefetcher file
-that contains one prefetch per line. Each line should consist of two space
-separated integral values, the unique instruction ID on which you want to send a
-prefetch and the address you want to prefetch. Note that the prefetches should
-be in the order that they occur in the trace.
+For a given Load Trace, your code should generate an output file that contains one
+prefetch per line. Each line should consist of two space separated integral
+values, the unique instruction ID for which you want to issue a prefetch and the
+load address you want to prefetch.  The unique instruction ID corresponds to
+the ID of the triggering load in the input Load Trace.  You can include upto two 
+prefetches per load listed in the Load Trace.  You can choose not to prefetch
+for any load.  Note that the prefetches should be in the order that they occur in the trace.
 
-For example:
-
+For example, consider a Load Trace as follows:
 ```
-3659 42229223
-5433 23369181
-6928 82819430
+3659 cycle1 A ip1 1
+5433 cycle2 B ip2 0
+6928 cycle3 C ip3 0
+```
+
+Your output file could look something like this:
+```
+3659 A+1    # Issue first prefetch for Instruction 3569
+3659 A+2    # Issue second prefetch for Instruction 3569
+5433 B+8    # Issue only one prefetch for Instruction 5433
 ```
 
 Your code should have two modes of functioning:
 
-1. Taking in a trace that your model trains on
-2. Taking in another trace that your model produces predictions in the form of
-   the prefetcher file.
+1. Taking in a Training Load Trace that your model trains on
+2. Taking in a Test Load Trace for which your model will produce predictions in
+   the format explained above.
 
 ## Building, Running, and Evaluating
 
@@ -45,8 +61,9 @@ where subcommand is any of `build|run|eval`
 
 ### Building
 
-To build both the baseline ChampSim binary with no prefetcher and the prefetcher
-ChampSim binary that reads your ML model's output from a file, run:
+The following command will compile two ChampSim binaries: (1) A ChampSim binary
+that reads your ML model's output from a file and uses that as a prefetcher,
+and (2) A ChampSim binary with no prefetching that is to be used as a baseline
 
 ```
 ./ml_prefetch_sim.py build
@@ -57,16 +74,16 @@ ChampSim binary that reads your ML model's output from a file, run:
 To run the baseline ChampSim binary on an execution trace:
 
 ```
-./ml_prefetch_sim.py run path_to_trace_here
+./ml_prefetch_sim.py run path_to_champsim_trace_here
 ```
 
-To additionally run the prefetcher ChampSim binary:
+To additionally run the ChampSim binary with your prefetcher:
 
 ```
-./ml_prefetch_sim.py run path_to_trace_here --prefetch path_to_prefetcher_file
+./ml_prefetch_sim.py run path_to_champsim_trace_here --prefetch path_to_prefetcher_file
 ```
 
-To run the prefetcher ChampSim binary only:
+To run the ChampSim binary with your prefetcher only:
 
 ```
 ./ml_prefetch_sim.py run path_to_trace_here --prefetch path_to_prefetcher_file --no-base
@@ -81,9 +98,10 @@ of no prefetcher), run:
 ./ml_prefetch_sim.py eval
 ```
 
-## Changes:
+## Changes made to ChampSim for the competition:
 
 - Add LLC prefetcher (from\_file) to load ML model prefetch predictions into ChampSim
+- Modify the LLC prefetcher to provide unique instruction IDs and cycle counts
 - Remove same-page restriction in src/cache.cc for more irregular prefetching
   opportunity
 - Add ml\_prefetch\_sim.py to handle all of the building, running, and evaluation.
