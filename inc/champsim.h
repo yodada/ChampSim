@@ -79,7 +79,8 @@ extern uint8_t warmup_complete[NUM_CPUS],
                all_simulation_complete,
                MAX_INSTR_DESTINATIONS,
                knob_cloudsuite,
-               knob_low_bandwidth;
+               knob_low_bandwidth,
+               prefetch_warmup_complete;
 
 extern uint64_t current_core_cycle[NUM_CPUS], 
                 stall_cycle[NUM_CPUS], 
@@ -95,7 +96,7 @@ void print_stats();
 uint64_t rotl64 (uint64_t n, unsigned int c),
          rotr64 (uint64_t n, unsigned int c),
   va_to_pa(uint32_t cpu, uint64_t instr_id, uint64_t va, uint64_t unique_vpage, uint8_t is_code);
-
+bool check_ppage(uint32_t cpu, uint64_t ppage);
 // log base 2 function from efectiu
 int lg2(int n);
 

@@ -1388,10 +1388,15 @@ int CACHE::add_wq(PACKET *packet)
 
 int CACHE::prefetch_line(uint64_t ip, uint64_t base_addr, uint64_t pf_addr, int pf_fill_level, uint32_t prefetch_metadata)
 {
+    if(!prefetch_warmup_complete)
+        return 0;
+
     pf_requested++;
 
     if (PQ.occupancy < PQ.SIZE) {
-        if (true) {
+        bool ppage_valid = check_ppage(0, (pf_addr >> LOG2_PAGE_SIZE));
+
+        if (ppage_valid) {
         //if ((base_addr>>LOG2_PAGE_SIZE) == (pf_addr>>LOG2_PAGE_SIZE)) {
             
             PACKET pf_packet;

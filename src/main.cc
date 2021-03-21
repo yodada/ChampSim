@@ -12,6 +12,7 @@ uint8_t warmup_complete[NUM_CPUS],
         MAX_INSTR_DESTINATIONS = NUM_INSTR_DESTINATIONS,
         knob_cloudsuite = 0,
         knob_low_bandwidth = 0;
+uint8_t prefetch_warmup_complete;
 
 uint64_t warmup_instructions     = 1000000,
          simulation_instructions = 10000000,
@@ -482,9 +483,20 @@ uint64_t va_to_pa(uint32_t cpu, uint64_t instr_id, uint64_t va, uint64_t unique_
 	  stall_cycle[cpu] = current_core_cycle[cpu] + PAGE_TABLE_LATENCY;
       }
 
-    //cout << "cpu: " << cpu << " allocated unique_vpage: " << hex << unique_vpage << " to ppage: " << ppage << dec << endl;
 
+//    cout << "cpu: " << cpu << " instr_id " << instr_id << " allocated unique_vpage: " << hex << unique_vpage << " to ppage: " << ppage << dec << " " << (int)is_code << endl;
     return pa;
+}
+
+bool check_ppage(uint32_t cpu, uint64_t ppage)
+{
+    uint64_t high_bit_mask = rotr64(cpu, lg2(NUM_CPUS));
+    ppage = ppage | high_bit_mask;
+    map <uint64_t, uint64_t>::iterator ppage_check = inverse_table.begin();
+    ppage_check = inverse_table.find(ppage);
+    if (ppage_check == inverse_table.end())
+        return false;
+    return true;
 }
 
 void cpu_l1i_prefetcher_cache_operate(uint32_t cpu_num, uint64_t v_addr, uint8_t cache_hit, uint8_t prefetch_hit)
@@ -523,13 +535,14 @@ int main(int argc, char** argv)
             {"hide_heartbeat", no_argument, 0, 'h'},
             {"cloudsuite", no_argument, 0, 'c'},
             {"low_bandwidth",  no_argument, 0, 'b'},
+            {"seed",  required_argument, 0, 'd'},
             {"traces",  no_argument, 0, 't'},
             {0, 0, 0, 0}      
         };
 
         int option_index = 0;
 
-        c = getopt_long_only(argc, argv, "wihsb", long_options, &option_index);
+        c = getopt_long_only(argc, argv, "wihsbd", long_options, &option_index);
 
         // no more option characters
         if (c == -1)
@@ -553,6 +566,9 @@ int main(int argc, char** argv)
                 break;
             case 'b':
                 knob_low_bandwidth = 1;
+                break;
+            case 'd':
+                seed_number = atol(optarg);
                 break;
             case 't':
                 traces_encountered = 1;
@@ -655,13 +671,18 @@ int main(int argc, char** argv)
 
             //printf("max count_str: %d\n", count_str);
             //printf("application: %s\n", pch[count_str-3]);
-
-            int j = 0;
-            while (pch[count_str-3][j] != '\0') {
-                seed_number += pch[count_str-3][j];
-                //printf("%c %d %d\n", pch[count_str-3][j], j, seed_number);
-                j++;
+            if(seed_number == 0)
+            {
+                int j = 0;
+                while (pch[count_str-3][j] != '\0') {
+                    seed_number += pch[count_str-3][j];
+                    //printf("%c %d %d\n", pch[count_str-3][j], j, seed_number);
+                    j++;
+                }
+                cout << "Computed seed: " << seed_number << endl;
             }
+            else
+                cout << "Read seed: " << seed_number << endl;
 
             ooo_cpu[count_traces].trace_file = popen(ooo_cpu[count_traces].gunzip_command, "r");
             if (ooo_cpu[count_traces].trace_file == NULL) {
@@ -770,6 +791,7 @@ int main(int argc, char** argv)
         }
 
         warmup_complete[i] = 0;
+        prefetch_warmup_complete = 0;
         //all_warmup_complete = NUM_CPUS;
         simulation_complete[i] = 0;
         current_core_cycle[i] = 0;
@@ -874,6 +896,9 @@ int main(int argc, char** argv)
                 warmup_complete[i] = 1;
                 all_warmup_complete++;
             }
+            if ((prefetch_warmup_complete == 0) && (ooo_cpu[i].num_retired > 10000000))
+                prefetch_warmup_complete = 1;
+
             if (all_warmup_complete == NUM_CPUS) { // this part is called only once when all cores are warmed up
                 all_warmup_complete++;
                 finish_warmup();
