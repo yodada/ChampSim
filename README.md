@@ -8,6 +8,10 @@ ChampSim to compute coverage, accuracy and instructions per cycle (IPC).
 ## Traces:
 
 The traces can be found at [this link](https://utexas.box.com/s/2k54kp8zvrqdfaa8cdhfquvcxwh7yn85).
+Alternatively, the `download.sh` file can be used to download all of the files to
+avoid bulk download restrictions from Box. You can also use the information found
+in the `download_links` file to download the data in another fashion.
+
 There are two types of traces that can be found here:
 - Load traces under the folder LoadTraces that you will use to train your ML models.  The 
   load trace is a series of program's LLC accesses, and the trace format is as follows: 
