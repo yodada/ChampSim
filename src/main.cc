@@ -17,6 +17,7 @@ uint8_t prefetch_warmup_complete;
 uint64_t warmup_instructions     = 1000000,
          simulation_instructions = 10000000,
          champsim_seed;
+uint64_t prefetch_warmup_instructions = 10000000;
 
 time_t start_time;
 
@@ -532,6 +533,7 @@ int main(int argc, char** argv)
         {
             {"warmup_instructions", required_argument, 0, 'w'},
             {"simulation_instructions", required_argument, 0, 'i'},
+            {"prefetch_warmup_instructions", required_argument, 0, 'p'},
             {"hide_heartbeat", no_argument, 0, 'h'},
             {"cloudsuite", no_argument, 0, 'c'},
             {"low_bandwidth",  no_argument, 0, 'b'},
@@ -542,7 +544,7 @@ int main(int argc, char** argv)
 
         int option_index = 0;
 
-        c = getopt_long_only(argc, argv, "wihsbd", long_options, &option_index);
+        c = getopt_long_only(argc, argv, "wiphsbd", long_options, &option_index);
 
         // no more option characters
         if (c == -1)
@@ -556,6 +558,11 @@ int main(int argc, char** argv)
                 break;
             case 'i':
                 simulation_instructions = atol(optarg);
+                break;
+            case 'p':
+                prefetch_warmup_instructions = atol(optarg);
+                if(prefetch_warmup_instructions < 10000000)
+                    prefetch_warmup_instructions = 10000000;
                 break;
             case 'h':
                 show_heartbeat = 0;
@@ -583,6 +590,7 @@ int main(int argc, char** argv)
 
     // consequences of knobs
     cout << "Warmup Instructions: " << warmup_instructions << endl;
+    cout << "Prefetch Warmup Instructions: " << prefetch_warmup_instructions << endl;
     cout << "Simulation Instructions: " << simulation_instructions << endl;
     //cout << "Scramble Loads: " << (knob_scramble_loads ? "ture" : "false") << endl;
     cout << "Number of CPUs: " << NUM_CPUS << endl;
@@ -896,7 +904,7 @@ int main(int argc, char** argv)
                 warmup_complete[i] = 1;
                 all_warmup_complete++;
             }
-            if ((prefetch_warmup_complete == 0) && (ooo_cpu[i].num_retired > 10000000))
+            if ((prefetch_warmup_complete == 0) && (ooo_cpu[i].num_retired > prefetch_warmup_instructions))
                 prefetch_warmup_complete = 1;
 
             if (all_warmup_complete == NUM_CPUS) { // this part is called only once when all cores are warmed up
