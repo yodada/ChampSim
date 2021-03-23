@@ -10,8 +10,17 @@ default_spec_instrs = 500
 default_gap_instrs = 300
 default_warmup_instrs = 0
 
-default_base_binary = 'bin/perceptron-no-no-no-no-lru-1core'
-default_prefetcher_binary = 'bin/perceptron-no-no-no-from_file-lru-1core'
+default_seed_file = './scripts/seeds.txt'
+
+default_base_binary = 'bin/hashed_perceptron-no-no-no-no-lru-1core'
+default_bo_binary = 'bin/hashed_perceptron-no-no-no-bo-lru-1core'
+default_sisb_binary = 'bin/hashed_perceptron-no-no-no-sisb-lru-1core'
+default_sisb_bo_binary = 'bin/hashed_perceptron-no-no-no-sisb_bo-lru-1core'
+default_prefetcher_binary = 'bin/hashed_perceptron-no-no-no-from_file-lru-1core'
+
+baseline_names = ['No Prefetcher', 'Best Offset', 'SISB', 'SISB Best Offset']
+baseline_fns = ['no', 'bo', 'sisb', 'sisb_bo']
+baseline_binaries = [default_base_binary, default_bo_binary, default_sisb_binary, default_sisb_bo_binary]
 
 help_str = {
 'help': '''usage: {prog} command [<args>]
@@ -30,9 +39,9 @@ Description:
     {prog} build [<target>]
         Builds <target> ChampSim binaries where <target> is one of:
 
-            all            Builds both the base and prefetcher binaries [default]
-            base           Builds just the base binary
-            prefetcher     Builds just the prefetcher binary
+            all            Builds all of the below binaries [default]
+            base           Builds all the baseline binaries
+            prefetcher     Builds just the prefetcher binary that reads from a file
 
         If <target> is unspecified, this will act as if `{prog} build all` was
         executed.
@@ -42,7 +51,7 @@ Notes:
 '''.format(prog=sys.argv[0]),
 
 'run': '''usage: {prog} run <execution-trace> [--prefetch <prefetch-file>] [--no-base] [--results-dir <results-dir>]
-                            [--num-instructions <num-instructions>] [--num-warmup-instructions <num-warmup-instructions>]
+                            [--num-instructions <num-instructions>] [--num-prefetch-warmup-instructions <num-warmup-instructions>]
 
 Description:
     {prog} run <execution-trace>
@@ -55,8 +64,8 @@ Options:
 
     --no-base
         When specified with --prefetch <prefetch-file>, run only the prefetcher
-        ChampSim binary on the specified execution trace without the base
-        ChampSim binary.
+        ChampSim binary on the specified execution trace without the baseline
+        ChampSim binaries.
 
     --results-dir <results-dir>
         Specifies what directory to save the ChampSim results file in. This
@@ -67,12 +76,15 @@ Options:
         {default_spec_instrs}M instructions for the spec benchmarks and
         {default_gap_instrs}M instructions for the gap benchmarks.
 
-    --num-warmup-instructions <num-warmup-instructions>
-        Number of instructions to warm-up the simulator for. Defaults to
-        {default_warmup_instrs}M instructions.
+    --num-prefetch-warmup-instructions <num-warmup-instructions>
+        Number of instructions to warm-up the simulator for before starting
+        prefetching. Defaults to {default_warmup_instrs}M instructions.
+
+    --seed-file <seed-file>
+        Path to seed file to load for ChampSim evaluation. Defaults to {seed_file}.
 '''.format(prog=sys.argv[0], default_results_dir=default_results_dir,
     default_spec_instrs=default_spec_instrs, default_gap_instrs=default_gap_instrs,
-    default_warmup_instrs=default_warmup_instrs),
+    default_warmup_instrs=default_warmup_instrs, seed_file=default_seed_file),
 
 'eval': '''usage: {prog} eval [--results-dir <results-dir>] [--output-file <output-file>]
 
@@ -102,68 +114,96 @@ Note:
 def build_command():
     build = 'all'
     if len(sys.argv) > 2:
-        if sys.argv[2] == 'all':
-            build = 'all'
-        elif sys.argv[2] == 'base':
-            build = 'base'
-        elif sys.argv[2] == 'prefetcher':
-            build = 'prefetcher'
-        else:
+        if sys.argv[2] not in ['all', 'base', 'prefetcher']:
             print('Invalid build target')
             exit(-1)
+        build = sys.argv[2]
 
-    # Build base
+    # Build no prefetcher baseline
     if build in ['all', 'base']:
-        print('Building base ChampSim binary')
-        os.system('./build_champsim.sh perceptron no no no no lru 1')
+        for name, fn in zip(baseline_names, baseline_fns):
+            print('Building ' + name + ' ChampSim binary')
+            os.system('./build_champsim.sh hashed_perceptron no no no ' + fn + ' lru 1')
 
     # Build prefetcher
     if build in ['all', 'prefetcher']:
         print('Building prefetcher ChampSim binary')
-        os.system('./build_champsim.sh perceptron no no no from_file lru 1')
+        os.system('./build_champsim.sh hashed_perceptron no no no from_file lru 1')
 
 def run_command():
     if len(sys.argv) < 3:
         print(help_str['run'])
         exit(-1)
 
-    execution_trace = sys.argv[2]
-
     parser = argparse.ArgumentParser(usage=argparse.SUPPRESS, add_help=False)
+    parser.add_argument('execution_trace', default=None)
     parser.add_argument('--prefetch', default=None)
     parser.add_argument('--no-base', default=False, action='store_true')
     parser.add_argument('--results-dir', default=default_results_dir)
-    parser.add_argument('--num-instructions', default=default_spec_instrs if execution_trace[0].isdigit() else default_gap_instrs)
-    parser.add_argument('--num-warmup-instructions', default=default_warmup_instrs)
+    parser.add_argument('--num-instructions', default=None) #default_spec_instrs if execution_trace[0].isdigit() else default_gap_instrs)
+    parser.add_argument('--num-prefetch-warmup-instructions', default=default_warmup_instrs)
+    parser.add_argument('--seed-file', default=default_seed_file)
 
-    args = parser.parse_args(sys.argv[3:])
+    args = parser.parse_args(sys.argv[2:])
+
+    execution_trace = args.execution_trace
+
+    if args.num_instructions is None:
+        args.num_instructions = default_spec_instrs if execution_trace[0].isdigit() else default_gap_instrs
+
+    if not os.path.exists(args.seed_file):
+        print('Seed file "' + args.seed_file + '" does not exist')
+        seed = None
+    else:
+        with open(args.seed_file, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line.split()[0] in os.path.basename(execution_trace):
+                    seed = line.split()[1]
+                    break
+            else:
+                print('Could not find execution trace "{}" in seed file "{}"'.format(execution_trace, args.seed_file))
+                seed = None
 
     if not os.path.exists(args.results_dir):
         os.makedirs(args.results_dir, exist_ok=True)
 
     if not args.no_base:
-        if not os.path.exists(default_base_binary):
-            print('Base ChampSim binary not found')
-            exit(-1)
+        for name, binary in zip(baseline_names, baseline_binaries):
+            if not os.path.exists(binary):
+                print(name + ' ChampSim binary not found')
+                exit(-1)
 
-        cmd = '{binary} -warmup_instructions {warm}000000 -simulation_instructions {sim}000000 -traces {trace} > {results}/{base_trace}-{base_binary}.txt 2>&1'.format(
-            binary=default_base_binary, warm=args.num_warmup_instructions, sim=args.num_instructions,
-            trace=execution_trace, results=args.results_dir, base_trace=os.path.basename(execution_trace),
-            base_binary=os.path.basename(default_base_binary))
+            if seed is not None:
+                cmd = '{binary} -prefetch_warmup_instructions {warm}000000 -simulation_instructions {sim}000000 -seed {seed} -traces {trace} > {results}/{base_trace}-{base_binary}.txt 2>&1'.format(
+                    binary=binary, warm=args.num_prefetch_warmup_instructions, sim=args.num_instructions,
+                    trace=execution_trace, seed=seed, results=args.results_dir,
+                    base_trace=os.path.basename(execution_trace), base_binary=os.path.basename(binary))
+            else:
+                cmd = '{binary} -prefetch_warmup_instructions {warm}000000 -simulation_instructions {sim}000000 -traces {trace} > {results}/{base_trace}-{base_binary}.txt 2>&1'.format(
+                    binary=binary, warm=args.num_prefetch_warmup_instructions, sim=args.num_instructions,
+                    trace=execution_trace, results=args.results_dir, base_trace=os.path.basename(execution_trace),
+                    base_binary=os.path.basename(binary))
 
-        print('Running "' + cmd + '"')
+            print('Running "' + cmd + '"')
 
-        os.system(cmd)
+            os.system(cmd)
 
     if args.prefetch is not None:
         if not os.path.exists(default_prefetcher_binary):
             print('Prefetcher ChampSim binary not found')
             exit(-1)
 
-        cmd = '<{prefetch} {binary} -warmup_instructions {warm}000000 -simulation_instructions {sim}000000 -traces {trace} > {results}/{base_trace}-{base_binary}.txt 2>&1'.format(
-            prefetch=args.prefetch, binary=default_prefetcher_binary, warm=args.num_warmup_instructions, sim=args.num_instructions,
-            trace=execution_trace, results=args.results_dir, base_trace=os.path.basename(execution_trace),
-            base_binary=os.path.basename(default_prefetcher_binary))
+        if seed is not None:
+            cmd = '<{prefetch} {binary} -prefetch_warmup_instructions {warm}000000 -simulation_instructions {sim}000000 -seed {seed} -traces {trace} > {results}/{base_trace}-{base_binary}.txt 2>&1'.format(
+                prefetch=args.prefetch, binary=default_prefetcher_binary, warm=args.num_prefetch_warmup_instructions, sim=args.num_instructions,
+                trace=execution_trace, seed=seed, results=args.results_dir,
+                base_trace=os.path.basename(execution_trace), base_binary=os.path.basename(default_prefetcher_binary))
+        else:
+            cmd = '<{prefetch} {binary} -prefetch_warmup_instructions {warm}000000 -simulation_instructions {sim}000000 -traces {trace} > {results}/{base_trace}-{base_binary}.txt 2>&1'.format(
+                prefetch=args.prefetch, binary=default_prefetcher_binary, warm=args.num_prefetch_warmup_instructions, sim=args.num_instructions,
+                trace=execution_trace, results=args.results_dir, base_trace=os.path.basename(execution_trace),
+                base_binary=os.path.basename(default_prefetcher_binary))
 
         print('Running "' + cmd + '"')
 
@@ -195,7 +235,7 @@ def read_file(path, cache_level='LLC'):
 
     return data
 
-def compute_stats(trace, prefetch=None, base=None):
+def compute_stats(trace, prefetch=None, base=None, baseline_name=None):
     if prefetch is None:
         return None
 
@@ -229,9 +269,9 @@ def compute_stats(trace, prefetch=None, base=None):
         mpki_improv = 'N/A'
         ipc_improv = 'N/A'
 
-    return '{trace},{acc},{cov},{mpki},{mpki_improv},{ipc},{ipc_improv}'.format(
-        trace=trace, acc=acc, cov=cov, mpki=str(pf_mpki), mpki_improv=mpki_improv,
-        ipc=str(ipc), ipc_improv=ipc_improv,
+    return '{trace},{baseline_name},{acc},{cov},{mpki},{mpki_improv},{ipc},{ipc_improv}'.format(
+        trace=trace, baseline_name=baseline_name, acc=acc, cov=cov, mpki=str(pf_mpki),
+        mpki_improv=mpki_improv, ipc=str(ipc), ipc_improv=ipc_improv,
     )
 
 def eval_command():
@@ -243,19 +283,24 @@ def eval_command():
 
     traces = {}
     for fn in os.listdir(args.results_dir):
-        trace = fn.split('-perceptron-')[0]
+        trace = fn.split('-hashed_perceptron-')[0]
         if trace not in traces:
             traces[trace] = {}
         if 'from_file' in fn:
             traces[trace]['prefetch'] = os.path.join(args.results_dir, fn)
         else:
-            traces[trace]['base'] = os.path.join(args.results_dir, fn)
+            for base_fn in baseline_fns:
+                if base_fn == fn.split('-hashed_perceptron-')[1].split('-')[3]:
+                    traces[trace][base_fn] = os.path.join(args.results_dir, fn)
 
-    stats = ['Trace,Accuracy,Coverage,MPKI,MPKI_Improvement,IPC,IPC_Improvement']
+    stats = ['Trace,Baseline,Accuracy,Coverage,MPKI,MPKI_Improvement,IPC,IPC_Improvement']
     for trace in traces:
-        trace_stats = compute_stats(trace, **traces[trace])
-        if trace_stats is not None:
-            stats.append(trace_stats)
+        d = traces[trace]
+        for fn in baseline_fns:
+            if fn in d:
+                trace_stats = compute_stats(trace, d['prefetch'], d[fn], baseline_name=fn)
+                if trace_stats is not None:
+                    stats.append(trace_stats)
     print('\n'.join(stats))
 
 def help_command():

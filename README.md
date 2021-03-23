@@ -83,7 +83,7 @@ and (2) A ChampSim binary with no prefetching that is to be used as a baseline
 
 ### Running
 
-To run the baseline ChampSim binary on an execution trace:
+To run the baseline ChampSim binaries on an execution trace:
 
 ```
 ./ml_prefetch_sim.py run path_to_champsim_trace_here
@@ -104,7 +104,7 @@ To run the ChampSim binary with your prefetcher only:
 ### Evaluation
 
 To evaluate the performance of ML prefetcher (and compare it against the baseline
-of no prefetcher), run:
+of no prefetcher, Best Offset, SISB, and SISB Best Offset), run:
 
 ```
 ./ml_prefetch_sim.py eval
