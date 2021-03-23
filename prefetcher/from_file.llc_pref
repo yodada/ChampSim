@@ -42,7 +42,7 @@ uint32_t CACHE::llc_prefetcher_operate(uint64_t addr, uint64_t ip, uint8_t cache
     auto itr = prefetches.find(instr_id);
     if (itr != prefetches.end()) {
         for(auto prefetch_addr : itr->second) {
-            cout << "Prefetch " << hex << prefetch_addr << dec << " for instr_id " << instr_id << endl;
+            // cout << "Prefetch " << hex << prefetch_addr << dec << " for instr_id " << instr_id << endl;
             prefetch_line(ip, addr, prefetch_addr, FILL_LLC, 0);
         }
     }
