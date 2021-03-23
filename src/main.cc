@@ -18,7 +18,7 @@ uint64_t warmup_instructions     = 1000000,
          simulation_instructions = 10000000,
          champsim_seed;
 uint64_t prefetch_warmup_instructions = 10000000;
-
+uint8_t all_prefetch_warmup_complete = 0;
 time_t start_time;
 
 // PAGE TABLE
@@ -555,6 +555,11 @@ int main(int argc, char** argv)
         switch(c) {
             case 'w':
                 warmup_instructions = atol(optarg);
+                if(warmup_instructions != 0)    
+                {
+                    cout << "**** Error: Please set warmup_instructions = 0 for the ML-DPC. Use -prefetch_warmup_instructions to skip insructions.****" << endl;
+                    assert(0);
+                }
                 break;
             case 'i':
                 simulation_instructions = atol(optarg);
@@ -721,10 +726,10 @@ int main(int argc, char** argv)
     for (int i=0; i<NUM_CPUS; i++) {
 
         ooo_cpu[i].cpu = i; 
-        ooo_cpu[i].warmup_instructions = warmup_instructions;
+        ooo_cpu[i].warmup_instructions = prefetch_warmup_instructions;
         ooo_cpu[i].simulation_instructions = simulation_instructions;
         ooo_cpu[i].begin_sim_cycle = 0; 
-        ooo_cpu[i].begin_sim_instr = warmup_instructions;
+        ooo_cpu[i].begin_sim_instr = prefetch_warmup_instructions;
 
         // ROB
         ooo_cpu[i].ROB.cpu = i;
@@ -905,10 +910,17 @@ int main(int argc, char** argv)
                 all_warmup_complete++;
             }
             if ((prefetch_warmup_complete == 0) && (ooo_cpu[i].num_retired > prefetch_warmup_instructions))
+            {
                 prefetch_warmup_complete = 1;
+                all_prefetch_warmup_complete++;
+            }
 
             if (all_warmup_complete == NUM_CPUS) { // this part is called only once when all cores are warmed up
                 all_warmup_complete++;
+                finish_warmup();
+            }
+            if (all_prefetch_warmup_complete == NUM_CPUS) { // this part is called only once when all cores are warmed up
+                all_prefetch_warmup_complete++;
                 finish_warmup();
             }
 
