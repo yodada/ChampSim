@@ -4,11 +4,13 @@ import argparse
 import os
 import sys
 
+from model import Model
+
 default_results_dir = './results'
 default_output_file = './stats.csv'
 default_spec_instrs = 500
 default_gap_instrs = 300
-default_warmup_instrs = 0
+default_warmup_instrs = 10
 
 default_seed_file = './scripts/seeds.txt'
 
@@ -29,6 +31,8 @@ Available commands:
     build            Builds base and prefetcher ChampSim binaries
     run              Runs ChampSim on specified traces
     eval             Parses and computes metrics on simulation results
+    train            Trains your model
+    generate         Generates the prefetch file
     help             Displays this help message. Command-specific help messages
                      can be displayed with `{prog} help command`
 '''.format(prog=sys.argv[0]),
@@ -77,8 +81,11 @@ Options:
         {default_gap_instrs}M instructions for the gap benchmarks.
 
     --num-prefetch-warmup-instructions <num-warmup-instructions>
-        Number of instructions to warm-up the simulator for before starting
-        prefetching. Defaults to {default_warmup_instrs}M instructions.
+        Number of instructions in millions to warm-up the simulator for before
+        starting prefetching. Defaults to {default_warmup_instrs}M instructions.
+        This would also be the number of instructions that you train your models
+        on. By specifying this, these first instructions do not get included in
+        the metric computation.
 
     --seed-file <seed-file>
         Path to seed file to load for ChampSim evaluation. Defaults to {seed_file}.
@@ -109,6 +116,44 @@ Note:
     Without the base data, relative performance data comparing MPKI and IPC will
     not be available and the coverage statistic will only be approximate.
 '''.format(prog=sys.argv[0], default_results_dir=default_results_dir, default_output_file=default_output_file),
+
+'train': '''usage: {prog} train <load-trace> [--model <model-path>] [--generate <prefetch-file>] [--num-prefetch-warmup-instructions <num-warmup-instructions>]
+
+Description:
+    {prog} train <load-trace>
+        Trains your model on the given load trace and optionally generates the
+        prefetch file.
+
+Options:
+    --generate <prefetch-file>
+        Outputs the prefetch file with your trained model
+
+    --model <model-path>
+        Saves model to this location. If not specified, the model is not
+        explicitly saved.
+
+    --num-prefetch-warmup-instructions <num-warmup-instructions>
+        Number of instructions in millions to warm-up the simulator for before
+        starting prefetching. Defaults to {default_warmup_instrs}M instructions.
+        This would also be the number of instructions that you train your models
+        on. By specifying this, these first instructions do not get included in
+        the metric computation.
+'''.format(prog=sys.argv[0], default_warmup_instrs=default_warmup_instrs),
+
+'generate': '''usage: {prog} generate <load-trace> <prefetch-file> [--model <model-path>] [--num-prefetch-warmup-instructions <num-warmup-instructions>]
+
+Description:
+    {prog} generate <load-trace> <prefetch-file> --model <model-path>
+        Generates the prefetch file using the specified model
+
+Options:
+    --num-prefetch-warmup-instructions <num-warmup-instructions>
+        Number of instructions in millions to warm-up the simulator for before
+        starting prefetching. Defaults to {default_warmup_instrs}M instructions.
+        This would also be the number of instructions that you train your models
+        on. By specifying this, these first instructions do not get included in
+        the metric computation.
+'''.format(prog=sys.argv[0], default_warmup_instrs=default_warmup_instrs),
 }
 
 def build_command():
@@ -296,12 +341,93 @@ def eval_command():
     stats = ['Trace,Baseline,Accuracy,Coverage,MPKI,MPKI_Improvement,IPC,IPC_Improvement']
     for trace in traces:
         d = traces[trace]
+        if 'no' in d:
+            stats.append(compute_stats(trace, d['no'], baseline_name='no'))
+            stats.append(compute_stats(trace, d['prefetch'], d['no'], baseline_name='yours'))
+        else:
+            stats.append(compute_stats(trace, d['prefetch'], baseline_name='No Baseline'))
         for fn in baseline_fns:
             if fn in d:
-                trace_stats = compute_stats(trace, d['prefetch'], d[fn], baseline_name=fn)
+                trace_stats = None
+                if fn != 'no' and 'no' in d:
+                    trace_stats = compute_stats(trace, d[fn], d['no'], baseline_name=fn)
                 if trace_stats is not None:
                     stats.append(trace_stats)
-    print('\n'.join(stats))
+
+    with open(args.output_file, 'w') as f:
+        print('\n'.join(stats), file=f)
+
+def generate_prefetch_file(path, prefetches):
+    with open(path, 'w') as f:
+        for instr_id, pf_addr in prefetches:
+            print(instr_id, hex(pf_addr)[2:], file=f)
+
+def read_load_trace_data(load_trace, num_prefetch_warmup_instructions):
+    
+    def process_line(line):
+        split = line.strip().split(', ')
+        return int(split[0]), int(split[1]), int(split[2], 16), int(split[3], 16), split[4] == '1'
+
+    train_data = []
+    eval_data = []
+    with open(load_trace, 'r') as f:
+        for line in f:
+            pline = process_line(line)
+            if pline[0] < num_prefetch_warmup_instructions * 1000000:
+                train_data.append(pline)
+            else:
+                eval_data.append(pline)
+
+    return train_data, eval_data
+
+def train_command():
+    if len(sys.argv) < 3:
+        print(help_str['train'])
+        exit(-1)
+    #'train': '''usage: {prog} train <load-trace> [--model <model-path>] [--generate <prefetch-file>] [--num-prefetch-warmup-instructions <num-warmup-instructions>]
+
+    parser = argparse.ArgumentParser(usage=argparse.SUPPRESS, add_help=False)
+    parser.add_argument('load_trace', default=None)
+    parser.add_argument('--generate', default=None)
+    parser.add_argument('--model', default=None)
+    parser.add_argument('--num-prefetch-warmup-instructions', default=default_warmup_instrs)
+
+    args = parser.parse_args(sys.argv[2:])
+
+    train_data, eval_data = read_load_trace_data(args.load_trace, args.num_prefetch_warmup_instructions)
+
+    model = Model()
+    model.train(train_data)
+
+    if args.model is not None:
+        model.save(args.model)
+
+    if args.generate is not None:
+        prefetches = model.generate(eval_data)
+        generate_prefetch_file(args.generate, prefetches)
+
+def generate_command():
+    if len(sys.argv) < 3:
+        print(help_str['generate'])
+        exit(-1)
+
+    #'generate': '''usage: {prog} generate <load-trace> <prefetch-file> [--model <model-path>] [--num-prefetch-warmup-instructions <num-warmup-instructions>]
+    parser = argparse.ArgumentParser(usage=argparse.SUPPRESS, add_help=False)
+    parser.add_argument('load_trace', default=None)
+    parser.add_argument('prefetch_file', default=None)
+    parser.add_argument('--model', default=None, required=True)
+    parser.add_argument('--num-prefetch-warmup-instructions', default=default_warmup_instrs)
+
+    args = parser.parse_args(sys.argv[2:])
+
+    model = Model()
+    model.load(args.model)
+
+    _, data = read_load_trace_data(args.load_trace, args.num_prefetch_warmup_instructions)
+
+    prefetches = model.generate(data)
+
+    generate_prefetch_file(args.prefetch_file, prefetches)
 
 def help_command():
     # If one of the available help strings, print and exit successfully
@@ -317,6 +443,8 @@ commands = {
     'build': build_command,
     'run': run_command,
     'eval': eval_command,
+    'train': train_command,
+    'generate': generate_command,
     'help': help_command,
 }
 

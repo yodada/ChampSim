@@ -81,6 +81,26 @@ and (2) A ChampSim binary with no prefetching that is to be used as a baseline
 ./ml_prefetch_sim.py build
 ```
 
+### Training
+
+```
+./ml_prefetch_sim.py train path_to_load_trace --model save_path --num-prefetch-warmup-instructions num_in_millions
+```
+
+To use the above, you need to modify the `model.py` file with your model. The
+prefetch warm-up instructions specify how many to include in the training set.
+The remainder of the instructions are the evaluation set.
+
+### Generating the Prefetch File
+
+```
+./ml_prefetch_sim.py generate path_to_load_trace path_to_output_prefetch_file --model save_path --num-prefetch-warmup-instructions num_in_millions
+```
+
+To use the above, you need to modify the `model.py` file with your model. The
+prefetch warm-up instructions specify how many to include in the training set.
+The remainder of the instructions are the evaluation set.
+
 ### Running
 
 To run the baseline ChampSim binaries on an execution trace:
