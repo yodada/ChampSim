@@ -84,8 +84,8 @@ class NextLineModel(MLPrefetchModel):
         prefetches = []
         for (instr_id, cycle_count, load_addr, load_ip, llc_hit) in data:
             # Prefetch the next two blocks
-            prefetches.append((instr_id, ((load_addr >> 6) + 1) << 12))
-            prefetches.append((instr_id, ((load_addr >> 6) + 2) << 12))
+            prefetches.append((instr_id, ((load_addr >> 6) + 1) << 6))
+            prefetches.append((instr_id, ((load_addr >> 6) + 2) << 6))
 
         return prefetches
 
