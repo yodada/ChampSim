@@ -130,7 +130,6 @@ def create_inout_sequences(data, tw):
           in_data = torch.stack(in_data)
           label = dec2bin(torch.LongTensor([label]), 64)
           inout_seq.append((data[int(i-tw/2)][0], in_data, label))
-          break
     return inout_seq
 
 
