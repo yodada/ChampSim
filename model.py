@@ -1,4 +1,8 @@
 from abc import ABC, abstractmethod
+import copy
+import torch
+import torch.nn as nn
+import tqdm
 
 class MLPrefetchModel(object):
     '''
@@ -89,6 +93,121 @@ class NextLineModel(MLPrefetchModel):
 
         return prefetches
 
+def dec2bin(x, bits):
+    """
+    Helper function to convert an interger number to bits
+    """
+    mask = 2 ** torch.arange(bits - 1, -1, -1).to(x.device, x.dtype)
+    return x.unsqueeze(-1).bitwise_and(mask).ne(0).float()
+
+def bin2dec(b, bits):
+    """
+    Helper function to convert bits to an integer
+    """
+    mask = 2 ** torch.arange(bits - 1, -1, -1).to(b.device, b.dtype)
+    return torch.sum(mask * b, -1)
+
+def create_inout_sequences(data, tw):
+    """
+    This function parse the input LoadTrace and produce the time-series training set
+    """
+
+    length = len(data)
+    inout_seq = []
+    for i in range(tw, length-1):
+      instr, cycle, load, pc, hit = data[i]
+      if not hit:
+          train_seq = data[i-tw:int(i-tw/2)]
+          label = load
+          in_data = []
+          for entry in train_seq:
+              addr = dec2bin(torch.LongTensor([entry[2]]), 64)
+              pc   = dec2bin(torch.LongTensor([entry[3]]), 64)
+              hit  = torch.FloatTensor([entry[4]])
+              stage1 = torch.cat((addr,pc)).view(-1)
+              stage2 = torch.cat((stage1,hit)).view(-1)
+              in_data.append(stage2)
+          in_data = torch.stack(in_data)
+          label = dec2bin(torch.LongTensor([label]), 64)
+          inout_seq.append((data[int(i-tw/2)][0], in_data, label))
+          break
+    return inout_seq
+
+
+class LSTM(nn.Module):
+    """
+    This model is a Long Short-Term Memory based ML model for data prefetching. The key observation is that,
+    a new prefetching command should be triggered by the past access history, similar to time-series
+    prediction.
+    This model takes 129 input features -- 64 for load address, 64 for load PC, and 1 for hit/miss. All input
+    features are in the range [0,1].
+    This model produces 64 outputs -- one for each bit in the predicted loading address.
+    There are 256 hidden states
+    """
+
+    def __init__(self, input_size=129, hidden_layer_size=256, output_size=64):
+        super().__init__()
+        self.hidden_layer_size = hidden_layer_size
+        self.lstm = nn.LSTM(input_size, hidden_layer_size)
+        self.linear = nn.Linear(hidden_layer_size, output_size)
+        self.hidden_cell = (torch.zeros((1,1,self.hidden_layer_size)),
+                            torch.zeros((1,1,self.hidden_layer_size)))
+
+    def forward(self, input_seq):
+        lstm_out, self.hidden_cell = self.lstm(input_seq.view(len(input_seq) ,1, -1), self.hidden_cell)
+        predictions = self.linear(lstm_out.view(len(input_seq), -1))
+        return predictions[-1]
+
+
+class LSTMMLModel(MLPrefetchModel):
+    """
+    This class wraps the LSTM model for data prefetching to be used with ChampSim
+    """
+
+    def __init__(self):
+        self.model = LSTM()
+
+    def load(self, path):
+        self.model = torch.load(path)
+
+    def save(self, path):
+        torch.save(self.model, path)
+
+    def train(self, data):
+        self.model.train()
+        loss_function = nn.MSELoss()
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=0.01)
+        data = create_inout_sequences(data, 32)
+        for epoch in range(30):
+            total_loss = 0
+            correct = 0
+            for entry, seq, labels in tqdm.tqdm(data):
+                optimizer.zero_grad()
+                self.model.hidden_cell = (torch.zeros((1, 1, self.model.hidden_layer_size)),
+                                          torch.zeros((1, 1, self.model.hidden_layer_size)))
+                y_pred = self.model(seq)
+                y_pred_addr = (y_pred>0.5).float()
+                if torch.equal(y_pred_addr, labels[0]):
+                    correct += 1
+                single_loss = loss_function(y_pred, labels[0])
+                single_loss.backward()
+                optimizer.step()
+                total_loss += single_loss.item()
+
+            print(f'epoch: {epoch:3} loss: {total_loss:10.8f} num correct: {correct}')
+
+    def generate(self, data):
+        self.model.eval()
+        prefetches = []
+        data = create_inout_sequences(data, 32)
+        for entry, seq, labels in tqdm.tqdm(data):
+            y_pred = self.model(seq)
+            y_pred_addr = (y_pred>0.5).float()
+            y_pred_addr = bin2dec(y_pred_addr, 64)
+            print((entry, int(y_pred_addr.item())))
+            prefetches.append((entry, int(y_pred_addr.item())))
+            exit()
+
 '''
 # Example PyTorch Model
 import torch
@@ -122,7 +241,7 @@ class TerribleMLModel(MLPrefetchModel):
 
     def __init__(self):
         self.model = PytorchMLModel()
-    
+
     def load(self, path):
         self.model = torch.load_state_dict(torch.load(path))
 
@@ -154,7 +273,7 @@ class TerribleMLModel(MLPrefetchModel):
         prefetches = []
         for i, (x, _) in enumerate(batch(data, random=False)):
             y_pred = self.model(x)
-            
+
             for xi, yi in zip(x, y_pred):
                 # Where instr_id is a function that extracts the unique instr_id
                 prefetches.append((instr_id(xi), yi))
@@ -163,4 +282,4 @@ class TerribleMLModel(MLPrefetchModel):
 '''
 
 # Replace this if you create your own model
-Model = NextLineModel
+Model = LSTMMLModel

@@ -363,7 +363,7 @@ def generate_prefetch_file(path, prefetches):
             print(instr_id, hex(pf_addr)[2:], file=f)
 
 def read_load_trace_data(load_trace, num_prefetch_warmup_instructions):
-    
+
     def process_line(line):
         split = line.strip().split(', ')
         return int(split[0]), int(split[1]), int(split[2], 16), int(split[3], 16), split[4] == '1'
@@ -373,7 +373,7 @@ def read_load_trace_data(load_trace, num_prefetch_warmup_instructions):
     with open(load_trace, 'r') as f:
         for line in f:
             pline = process_line(line)
-            if pline[0] < num_prefetch_warmup_instructions * 1000000:
+            if pline[0] < int(num_prefetch_warmup_instructions) * 1000000:
                 train_data.append(pline)
             else:
                 eval_data.append(pline)
