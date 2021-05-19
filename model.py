@@ -205,6 +205,7 @@ class LSTMMLModel(MLPrefetchModel):
             y_pred_addr = bin2dec(y_pred_addr, 64)
             print((entry, int(y_pred_addr.item())))
             prefetches.append((entry, int(y_pred_addr.item())))
+        return prefetches
 
 '''
 # Example PyTorch Model
