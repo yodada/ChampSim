@@ -203,7 +203,7 @@ class LSTMMLModel(MLPrefetchModel):
             y_pred = self.model(seq)
             y_pred_addr = (y_pred>0.5).float()
             y_pred_addr = bin2dec(y_pred_addr, 64)
-            print((entry, int(y_pred_addr.item())))
+            #print((entry, int(y_pred_addr.item())))
             prefetches.append((entry, int(y_pred_addr.item())))
         return prefetches
 
